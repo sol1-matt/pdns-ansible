@@ -51,6 +51,9 @@
     mode: 0755
   when: "pdns_config['include-dir'] is defined"
 
+- include: dynamic-dns-update.yml
+  when: pdns_dynamic_dns_update_key is defined
+
 - name: Restart PowerDNS
   service:
     name: "{{ pdns_service_name }}"

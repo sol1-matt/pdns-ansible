@@ -1,0 +1,55 @@
+---
+- name: does the key already exist
+  command: pdnsutil list-tsig-keys
+  register: pdnsutil_list_tsig_keys
+
+- name: debug pdnsutil_list_tsig_keys
+  debug:
+    msg: "{{ item }}"
+  with_items: "{{ pdnsutil_list_tsig_keys.stdout_lines }}"
+
+- name: generate the keys
+  command:
+    cmd: dnssec-keygen -a hmac-md5 -b 128 -n USER {{ pdns_dynamic_dns_update_key }}
+    chdir: /root/
+  when: 
+    - pdnsutil_list_tsig_keys.stdout is defined
+    - pdnsutil_list_tsig_keys.stdout is not search("{{ pdns_dynamic_dns_update_key }}. ")
+  register: dnssec_keygen
+
+- name: debug dnssec_keygen
+  debug:
+    msg: "{{ dnssec_keygen }}"
+  when: dnssec_keygen is defined
+
+- name: get the new secret
+  shell: cat "/root/{{ dnssec_keygen.stdout }}.key" | awk '{print $NF}'
+  register: dnssec_keygen_secret
+  when: dnssec_keygen.stdout is defined
+
+- name: get the existing secret
+  set_fact:
+    dnssec_keygen_secret: "{{ dnssec_keygen_secret | default({}) | combine( {'stdout': item.split(' ')[-1]} ) }}"
+  with_items: "{{ pdnsutil_list_tsig_keys.stdout_lines }}"
+  when:
+    - dnssec_keygen.stdout is not defined
+    - pdnsutil_list_tsig_keys.stdout_lines is defined
+    - item is search("{{ pdns_dynamic_dns_update_key }}. ")
+
+- name: debug dnssec_keygen
+  debug:
+    msg: "{{ dnssec_keygen_secret }}"
+  when: dnssec_keygen_secret is defined
+
+- name: import tsig key
+  command: pdnsutil import-tsig-key {{ pdns_dynamic_dns_update_key }} hmac-md5 {{ dnssec_keygen_secret.stdout }}
+  when: 
+    - dnssec_keygen_secret.stdout is defined
+    - pdnsutil_list_tsig_keys.stdout is not search("{{ pdns_dynamic_dns_update_key }}. ")
+
+- name: activate tsig key
+  command: pdnsutil activate-tsig-key {{ item.name }} {{ pdns_dynamic_dns_update_key }} master
+  with_items: "{{ pdns_zones }}"
+  when:
+    - dnssec_keygen_secret.stdout is defined
+    - item.dynamic_update is defined and item.dynamic_update

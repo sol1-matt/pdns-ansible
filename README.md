@@ -313,6 +313,18 @@ in the location specified by the `database_name` variable.
       - "{{ database_name }}"
 ```
 
+Configure tsig keys for dynamic dns updates to the PowerDNS Server and activate the key for a domain
+
+```yaml
+
+pdns_dynamic_dns_update_key: ddnskeyname
+
+pdns_zones:
+  - name: example.net
+    dynamic_update: true
+
+```
+
 ## Changelog
 
 A detailed changelog of all the changes applied to the role is available [here](./CHANGELOG.md).
